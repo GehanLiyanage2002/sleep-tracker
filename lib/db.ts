@@ -1,13 +1,32 @@
 import { PrismaClient } from "@prisma/client";
+import { PrismaPg } from "@prisma/adapter-pg";
+import { Pool } from "pg";
 
-declare global {
-  // allow global `var` declarations
-  // eslint-disable-next-line no-var
-  var prisma: PrismaClient | undefined;
+const connectionString = process.env.DATABASE_URL;
+
+if (!connectionString) {
+  throw new Error("❌ DATABASE_URL is missing in .env");
 }
 
-export const db = global.prisma || new PrismaClient();
+// Create pg Pool (required by PrismaPg)
+const pool = new Pool({
+  connectionString,
+});
+
+// Pass pg Pool → PrismaPg → PrismaClient
+const adapter = new PrismaPg(pool);
+
+const globalForPrisma = globalThis as unknown as {
+  prisma: PrismaClient | undefined;
+};
+
+export const db =
+  globalForPrisma.prisma ??
+  new PrismaClient({
+    adapter,
+    log: ["error", "warn"], // optional but helpful
+  });
 
 if (process.env.NODE_ENV !== "production") {
-    global.prisma = db;
+  globalForPrisma.prisma = db;
 }
